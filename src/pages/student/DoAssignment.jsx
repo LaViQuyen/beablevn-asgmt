@@ -851,6 +851,13 @@ export default function DoAssignment() {
                 {/* Back */}
                 <div style={{ width: '100%', height: '100%', position: 'absolute', backfaceVisibility: 'hidden', backgroundColor: '#003366', color: 'white', borderRadius: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px', boxSizing: 'border-box', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.2)', transform: 'rotateX(180deg)' }}>
                   <h3 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '20px', textAlign: 'center' }}>{card.definition || 'No Definition'}</h3>
+                  {card.imageUrl && (
+                    <img 
+                      src={card.imageUrl} 
+                      alt="Vocab illustration" 
+                      style={{ maxHeight: '140px', maxWidth: '100%', objectFit: 'contain', borderRadius: '12px', marginBottom: '20px', backgroundColor: 'rgba(255,255,255,0.1)', padding: '5px' }} 
+                    />
+                  )}
                   {card.example && <p style={{ fontSize: '16px', color: '#cbd5e1', textAlign: 'center', fontStyle: 'italic', lineHeight: '1.6' }}>"{card.example}"</p>}
                 </div>
               </div>
@@ -968,7 +975,7 @@ export default function DoAssignment() {
     const parts = formattedText.split(/\[(\d+)\]/g);
 
     return (
-      <div style={{ lineHeight: '2.4', fontSize: '15px', color: '#334155' }}>
+      <div style={{ lineHeight: '2.4', fontSize: '15px', color: '#334155', wordBreak: 'break-word' }}>
         {parts.map((part, index) => {
           if (index % 2 === 1) { 
             const gapId = part;
@@ -1036,7 +1043,7 @@ export default function DoAssignment() {
                     <span style={{ fontWeight: '800', fontSize: '14px', letterSpacing: '1px', textTransform: 'uppercase' }}>Reading Passage</span>
                   </div>
                   <h2 style={{ color: '#003366', marginTop: 0, marginBottom: '24px', fontSize: isMobile ? '22px' : '26px', fontWeight: '800' }}>{section.title}</h2>
-                  <div style={{ color: '#334155', fontSize: '16px', lineHeight: '1.8', whiteSpace: 'pre-wrap', textAlign: 'justify' }} dangerouslySetInnerHTML={{ __html: section.passageContent }} />
+                  <div style={{ color: '#334155', fontSize: '16px', lineHeight: '1.8', whiteSpace: 'pre-wrap', textAlign: 'justify', wordBreak: 'break-word' }} dangerouslySetInnerHTML={{ __html: section.passageContent }} />
                 </div>
               )}
 
@@ -1079,7 +1086,7 @@ export default function DoAssignment() {
                         </div>
                       )}
 
-                      {q.text && q.type !== 'GAP_FILL_PARAGRAPH' && <div style={{ fontSize: '16px', color: '#003366', fontWeight: '500', marginBottom: '24px', lineHeight: '1.6' }} dangerouslySetInnerHTML={{ __html: q.text }} />}
+                      {q.text && q.type !== 'GAP_FILL_PARAGRAPH' && <div style={{ fontSize: '16px', color: '#003366', fontWeight: '500', marginBottom: '24px', lineHeight: '1.6', wordBreak: 'break-word' }} dangerouslySetInnerHTML={{ __html: q.text }} />}
 
                       {/* MCQ */}
                       {q.type === 'MCQ' && (
@@ -1109,7 +1116,7 @@ export default function DoAssignment() {
                                 </div>
                                 <div style={{ fontSize: '15px', fontWeight: isChecked ? '700' : '500', lineHeight: '1.6', pointerEvents: 'none', display: 'flex', alignItems: 'flex-start', flex: 1 }}>
                                   <span style={{ fontWeight: '800', marginRight: '8px' }}>{String.fromCharCode(65 + i)}.</span>
-                                  <div dangerouslySetInnerHTML={{ __html: optObj.text }} style={{ flex: 1, margin: 0, padding: 0 }} />
+                                  <div dangerouslySetInnerHTML={{ __html: optObj.text }} style={{ flex: 1, margin: 0, padding: 0, wordBreak: 'break-word' }} />
                                 </div>
                               </div>
                             );
@@ -1221,7 +1228,7 @@ export default function DoAssignment() {
                               <div style={{ fontWeight: '800', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <SvgIcons.Info /> Giải thích / Feedback:
                               </div>
-                              {q.explanation ? <div dangerouslySetInnerHTML={{ __html: q.explanation }} /> : <div>Không có giải thích chi tiết cho câu hỏi này.</div>}
+                              {q.explanation ? <div dangerouslySetInnerHTML={{ __html: q.explanation }} style={{ wordBreak: 'break-word' }} /> : <div>Không có giải thích chi tiết cho câu hỏi này.</div>}
                             </>
                           )}
                         </div>

@@ -41,6 +41,14 @@ export default function ExerciseLibrary() {
   const [inputValue, setInputValue] = useState('');
   const [activeMenuId, setActiveMenuId] = useState(null);
 
+  // ---> THÊM 3 STATE NÀY CHO TÍNH NĂNG MOVE <---
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [moveItemParams, setMoveItemParams] = useState(null); // Lưu thông tin item đang được bấm
+  const [selectedTargetFolder, setSelectedTargetFolder] = useState(''); // ID thư mục đích
+
+  // STATE MỚI: Ghi nhớ trạng thái đóng/mở của các thư mục (dấu mũi tên)
+  const [expandedFolders, setExpandedFolders] = useState({});
+
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -138,39 +146,67 @@ export default function ExerciseLibrary() {
     setActiveMenuId(null);
   };
 
-  // DI CHUYỂN THƯ MỤC / BÀI TẬP (HỖ TRỢ MOVE SELECTED)
-  const handleMove = async (item, isFolder) => {
-    const targetFolderName = window.prompt("Nhập tên thư mục (Để trống để dời ra ngoài gốc):");
-    if (targetFolderName !== null) {
-      let targetFolderId = null;
-      if (targetFolderName.trim() !== "") {
-        const targetFolder = folders.find(f => f.name.toLowerCase() === targetFolderName.toLowerCase().trim());
-        if (targetFolder) targetFolderId = targetFolder.id;
-        else { alert("Không tìm thấy thư mục có tên này!"); setActiveMenuId(null); return; }
-      }
-      
-      if (isFolder) {
-        if (targetFolderId === item.id) {
-           alert("Không thể di chuyển thư mục vào chính nó!"); setActiveMenuId(null); return;
+  // 1. HÀM MỞ POPUP MOVE
+  const openMoveModal = (item, isFolder) => {
+    setMoveItemParams({ item, isFolder });
+    setSelectedTargetFolder(''); // Mặc định chọn "Thư mục gốc"
+    setShowMoveModal(true);
+    setActiveMenuId(null); // Đóng menu thả xuống
+  };
+
+  // 2. HÀM XÁC NHẬN DI CHUYỂN BÀI TẬP & THƯ MỤC
+  const confirmMove = async () => {
+    // Nếu dropdown chọn Root (Rỗng) thì gán target là null
+    const targetFolderId = selectedTargetFolder === '' ? null : selectedTargetFolder;
+    const { item, isFolder } = moveItemParams;
+    
+    // Kiểm tra xem item này có nằm trong danh sách đang được tick chọn nhiều cái không
+    const isMultipleSelected = selectedItems.includes(item.id) && selectedItems.length > 1;
+
+    try {
+      if (isMultipleSelected) {
+        // --- CHẾ ĐỘ DI CHUYỂN HÀNG LOẠT (HỖ TRỢ CẢ FILE LẪN FOLDER) ---
+        const selectedQuizIds = selectedItems.filter(id => quizzes.some(q => q.id === id));
+        const selectedFolderIds = selectedItems.filter(id => folders.some(f => f.id === id));
+
+        // Chặn lỗi logic: Không được move một thư mục vào chính nó
+        if (selectedFolderIds.includes(targetFolderId)) {
+          alert("Lỗi: Không thể di chuyển thư mục vào bên trong chính nó!");
+          return;
         }
-        try {
+
+        // Bắn đồng loạt các lệnh update lên Firebase
+        await Promise.all([
+          ...selectedQuizIds.map(id => updateDoc(doc(db, "quizzes", id), { folderId: targetFolderId })),
+          ...selectedFolderIds.map(id => updateDoc(doc(db, "folders", id), { parentId: targetFolderId }))
+        ]);
+
+        // Cập nhật giao diện lập tức
+        setQuizzes(prev => prev.map(q => selectedQuizIds.includes(q.id) ? { ...q, folderId: targetFolderId } : q));
+        setFolders(prev => prev.map(f => selectedFolderIds.includes(f.id) ? { ...f, parentId: targetFolderId } : f));
+        setSelectedItems([]); // Xóa các ô đã tick
+
+      } else {
+        // --- CHẾ ĐỘ DI CHUYỂN 1 ITEM DUY NHẤT ---
+        if (isFolder) {
+          if (targetFolderId === item.id) {
+            alert("Lỗi: Không thể di chuyển thư mục vào bên trong chính nó!"); 
+            return;
+          }
           await updateDoc(doc(db, "folders", item.id), { parentId: targetFolderId });
           setFolders(prev => prev.map(f => f.id === item.id ? { ...f, parentId: targetFolderId } : f));
-        } catch (error) { console.error(error); alert("Lỗi khi di chuyển thư mục!"); }
-      } else {
-        // HỖ TRỢ MOVE NHIỀU BÀI TẬP CÙNG LÚC
-        const isMultipleSelected = selectedItems.includes(item.id) && selectedItems.length > 1;
-        // Chỉ lấy ID của các bài tập (quizzes) đang được check
-        const selectedQuizIds = isMultipleSelected ? selectedItems.filter(id => quizzes.some(q => q.id === id)) : [item.id];
-
-        try {
-          await Promise.all(selectedQuizIds.map(id => updateDoc(doc(db, "quizzes", id), { folderId: targetFolderId })));
-          setQuizzes(prev => prev.map(q => selectedQuizIds.includes(q.id) ? { ...q, folderId: targetFolderId } : q));
-          if (isMultipleSelected) setSelectedItems([]); // Clear check box
-        } catch (error) { console.error(error); alert("Lỗi khi di chuyển bài tập!"); }
+        } else {
+          await updateDoc(doc(db, "quizzes", item.id), { folderId: targetFolderId });
+          setQuizzes(prev => prev.map(q => q.id === item.id ? { ...q, folderId: targetFolderId } : q));
+        }
       }
+
+      setShowMoveModal(false);
+      setMoveItemParams(null);
+    } catch (error) {
+      console.error(error);
+      alert("Đã xảy ra lỗi khi di chuyển!");
     }
-    setActiveMenuId(null);
   };
 
   // XÓA THƯ MỤC / BÀI TẬP
@@ -279,15 +315,17 @@ export default function ExerciseLibrary() {
         </div>
       );
     }
+
+    
     return (
       <div ref={menuRef} style={{ position: 'absolute', right: '40px', top: '30px', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', zIndex: 100, minWidth: '160px', padding: '8px 0' }}>
         <button style={btnStyle} onClick={() => { if(!isFolder) navigate(`/teacher/exercises/${item.id}`); }}> <Icons.Edit /> Edit</button>
         {!isFolder && <button style={btnStyle} onClick={() => handleDuplicate(item)}> <Icons.Copy /> Duplicate</button>}
         
-        <button style={btnStyle} onClick={() => handleMove(item, isFolder)}> 
+        <button style={btnStyle} onClick={() => openMoveModal(item, isFolder)}> 
           <Icons.Move /> 
-          {(!isFolder && selectedItems.includes(item.id) && selectedItems.length > 1) 
-            ? `Move Selected (${selectedItems.filter(id => quizzes.some(q => q.id === id)).length})` 
+          {(selectedItems.includes(item.id) && selectedItems.length > 1) 
+            ? `Move Selected (${selectedItems.length})` 
             : 'Move'}
         </button>
 
@@ -296,6 +334,77 @@ export default function ExerciseLibrary() {
         <button style={{ ...btnStyle, color: '#ef4444' }} onClick={() => handleDelete(item, isFolder)}> <Icons.Trash /> Delete</button>
       </div>
     );
+  };
+
+  // ==========================================
+  // LOGIC RENDER CÂY THƯ MỤC (VS CODE STYLE)
+  // ==========================================
+  const toggleFolderExpand = (e, folderId) => {
+    e.stopPropagation(); // Ngăn click chuột chọn nhầm thư mục khi chỉ muốn bấm mũi tên
+    setExpandedFolders(prev => ({ ...prev, [folderId]: !prev[folderId] }));
+  };
+
+  const renderFolderTree = (parentId = null, level = 0) => {
+    const children = folders.filter(f => (f.parentId || null) === parentId);
+    children.sort((a, b) => a.name.localeCompare(b.name));
+
+    if (children.length === 0) return null;
+
+    return children.map(folder => {
+      const hasChildren = folders.some(f => (f.parentId || null) === folder.id);
+      const isExpanded = expandedFolders[folder.id];
+      const isSelected = selectedTargetFolder === folder.id;
+
+      return (
+        <div key={folder.id}>
+          <div
+            onClick={() => setSelectedTargetFolder(folder.id)}
+            style={{ 
+              display: 'flex', alignItems: 'center', 
+              padding: '4px 8px', // Làm mỏng lại padding cho giống VS Code
+              paddingLeft: `${level * 20 + 4}px`, // Điều chỉnh thụt lề mượt hơn
+              cursor: 'pointer', 
+              backgroundColor: isSelected ? '#e0f2fe' : 'transparent', 
+              borderRadius: '6px', // Góc bo tròn nhỏ lại
+              marginBottom: '2px',
+              transition: 'background 0.2s'
+            }}
+            onMouseEnter={e => { if (!isSelected) e.currentTarget.style.backgroundColor = '#f1f5f9'; }}
+            onMouseLeave={e => { if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent'; }}
+          >
+            {/* Nút mũi tên */}
+            <div 
+              onClick={(e) => hasChildren ? toggleFolderExpand(e, folder.id) : null}
+              style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: hasChildren ? 'pointer' : 'default', color: '#94a3b8', borderRadius: '4px', marginRight: '4px' }}
+              onMouseEnter={e => { if(hasChildren) e.currentTarget.style.color = '#334155'; }}
+              onMouseLeave={e => { if(hasChildren) e.currentTarget.style.color = '#94a3b8'; }}
+            >
+              {hasChildren ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease-in-out' }}>
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+              ) : null}
+            </div>
+
+            {/* Icon Thư mục */}
+            <span style={{ marginRight: '8px', display: 'flex', color: isSelected ? '#0ea5e9' : '#94a3b8' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill={isSelected ? "#bae6fd" : (isExpanded && hasChildren ? "#f1f5f9" : "none")} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+            </span>
+            
+            {/* Tên Thư mục */}
+            <span style={{ fontWeight: isSelected ? '700' : '500', color: isSelected ? '#0369a1' : '#334155', fontSize: '14px', userSelect: 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {folder.name}
+            </span>
+          </div>
+
+          {hasChildren && isExpanded && (
+            <div>
+              {renderFolderTree(folder.id, level + 1)}
+            </div>
+          )}
+        </div>
+      );
+    });
   };
 
   return (
@@ -423,23 +532,57 @@ export default function ExerciseLibrary() {
         </div>
       </div>
 
-      {/* NEW FOLDER MODAL */}
-      {showFolderModal && (
+      {/* --- POPUP CHỌN THƯ MỤC (DROPDOWN LIST) --- */}
+      {showMoveModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '15px', boxSizing: 'border-box' }}>
           <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '24px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
-            <h3 style={{ color: '#003366', marginTop: 0, marginBottom: '20px', fontWeight: '800', fontSize: '20px' }}>Tạo Thư mục mới</h3>
-            <input 
-              type="text" 
-              placeholder="Nhập tên thư mục..." 
-              value={inputValue} 
-              onChange={e => setInputValue(e.target.value)} 
-              style={{ width: '100%', padding: '14px 16px', borderRadius: '12px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '15px', color: '#334155', fontWeight: '600', boxSizing: 'border-box', transition: 'all 0.2s', marginBottom: '24px' }}
-              onFocus={(e) => { e.target.style.borderColor = '#003366'; e.target.style.backgroundColor = 'white'; }} 
-              onBlur={(e) => { e.target.style.borderColor = '#cbd5e1'; e.target.style.backgroundColor = '#f8fafc'; }}
-            />
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+              <div style={{ backgroundColor: '#e0f2fe', color: '#0ea5e9', padding: '8px', borderRadius: '10px' }}><Icons.Move /></div>
+              <h3 style={{ color: '#003366', margin: 0, fontWeight: '800', fontSize: '20px' }}>Di chuyển đến</h3>
+            </div>
+
+            {/* GIAO DIỆN CÂY THƯ MỤC KIỂU VS CODE */}
+            <div style={{ border: '1px solid #cbd5e1', borderRadius: '12px', padding: '8px', maxHeight: '250px', overflowY: 'auto', marginBottom: '24px', backgroundColor: '#f8fafc', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)' }}>
+              
+              {/* Lựa chọn thư mục gốc (Đã được làm đẹp lại) */}
+              <div 
+                onClick={() => setSelectedTargetFolder('')}
+                style={{ display: 'flex', alignItems: 'center', padding: '4px 8px', cursor: 'pointer', backgroundColor: selectedTargetFolder === '' ? '#e0f2fe' : 'transparent', borderRadius: '6px', marginBottom: '6px', transition: 'background 0.2s' }}
+                onMouseEnter={e => { if (selectedTargetFolder !== '') e.currentTarget.style.backgroundColor = '#f1f5f9'; }}
+                onMouseLeave={e => { if (selectedTargetFolder !== '') e.currentTarget.style.backgroundColor = 'transparent'; }}
+              >
+                <div style={{ width: '24px' }}></div> {/* Cục đệm để thụt lề bằng với hàng dưới */}
+                <span style={{ marginRight: '8px', display: 'flex', color: selectedTargetFolder === '' ? '#0ea5e9' : '#64748b' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                </span> 
+                <span style={{ fontWeight: selectedTargetFolder === '' ? '700' : '500', color: selectedTargetFolder === '' ? '#0369a1' : '#334155', fontSize: '14px', userSelect: 'none' }}>
+                  Thư mục Gốc (Root)
+                </span>
+              </div>
+
+              {/* Khối gọi hàm đệ quy tự động render các thư mục */}
+              {renderFolderTree(null, 0)}
+
+            </div>
+
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', backgroundColor: 'white', color: '#64748b', fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s' }} onClick={() => { setShowFolderModal(false); setInputValue(''); }}>Hủy</button>
-              <button onClick={handleCreateFolder} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: 'none', backgroundColor: '#003366', color: 'white', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(0,51,102,0.2)', transition: 'all 0.2s' }}>Tạo Mới</button>
+              <button 
+                style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', backgroundColor: 'white', color: '#64748b', fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s' }} 
+                onClick={() => setShowMoveModal(false)}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
+              >
+                Hủy
+              </button>
+              <button 
+                onClick={confirmMove} 
+                style={{ flex: 1, padding: '14px', borderRadius: '12px', border: 'none', backgroundColor: '#003366', color: 'white', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(0,51,102,0.2)', transition: 'all 0.2s' }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                Xác nhận
+              </button>
             </div>
           </div>
         </div>

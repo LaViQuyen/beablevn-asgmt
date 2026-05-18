@@ -21,10 +21,12 @@ const SvgIcons = {
   Info: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>,
   Bold: () => <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path></svg>,
   Italic: () => <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><line x1="19" y1="4" x2="10" y2="4"></line><line x1="14" y1="20" x2="5" y2="20"></line><line x1="15" y1="4" x2="9" y2="20"></line></svg>,
-  Underline: () => <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"></path><line x1="4" y1="21" x2="20" y2="21"></line></svg>
+  Underline: () => <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"></path><line x1="4" y1="21" x2="20" y2="21"></line></svg>,
+  Highlighter: () => <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M20.38 3.46L16.2 7.64 12 3.46 3.46 12l4.18 4.18L3.46 20.36l4.18 4.18 8.54-8.54 4.18 4.18 4.18-4.18-4.16-4.18 4.18-4.18z"></path><path d="M12 3.46l8.54 8.54"></path></svg>,
+  ResetColor: () => <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
 };
 
-// --- COMPONENT: TRÌNH SOẠN THẢO VĂN BẢN (RICH TEXT INPUT) ---
+// --- COMPONENT: TRÌNH SOẠN THẢO VĂN BẢN (RICH TEXT INPUT) ĐÃ NÂNG CẤP ---
 const RichTextInput = ({ label, value, onChange, placeholder, minHeight = '60px' }) => {
   const editorRef = useRef(null);
 
@@ -51,10 +53,18 @@ const RichTextInput = ({ label, value, onChange, placeholder, minHeight = '60px'
     return { sel, range };
   };
 
-  const handleCommand = (cmd, e) => {
+  const handleCommand = (cmd, arg = null, e) => {
     e.preventDefault(); 
     focusEditorAndGetSelection();
-    document.execCommand(cmd, false, null);
+    // Xử lý riêng cho trường hợp Reset Background (highlight)
+    if (cmd === 'resetBackground') {
+      document.execCommand('backColor', false, 'transparent');
+      // Fix fallback cho trình duyệt không hỗ trợ 'transparent'
+      document.execCommand('backColor', false, 'rgba(0,0,0,0)'); 
+    } else {
+      document.execCommand(cmd, false, arg);
+    }
+    
     if (editorRef.current) {
       onChange(editorRef.current.innerHTML);
     }
@@ -89,13 +99,32 @@ const RichTextInput = ({ label, value, onChange, placeholder, minHeight = '60px'
       {label && <label style={{ fontWeight: '700', fontSize: '13px', color: '#003366', display: 'block' }}>{label}</label>}
       <div style={{ border: '1px solid #cbd5e1', borderRadius: '12px', overflow: 'hidden', backgroundColor: 'white', transition: 'border-color 0.2s' }}>
         
-        {/* Toolbar */}
-        <div style={{ display: 'flex', gap: '8px', padding: '8px 16px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
-          <button onMouseDown={(e) => handleCommand('bold', e)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#003366', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="In đậm"><SvgIcons.Bold /></button>
-          <button onMouseDown={(e) => handleCommand('italic', e)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#003366', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="In nghiêng"><SvgIcons.Italic /></button>
-          <button onMouseDown={(e) => handleCommand('underline', e)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#003366', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Gạch dưới"><SvgIcons.Underline /></button>
-          <div style={{ width: '1px', backgroundColor: '#cbd5e1', margin: '0 4px' }}></div>
-          <button onMouseDown={handleInsertImage} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#003366', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Chèn ảnh bằng URL"><SvgIcons.Image /></button>
+        {/* Toolbar (Đã tối ưu wrap cho mobile) */}
+        <div style={{ display: 'flex', gap: '6px', padding: '8px 12px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc', flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* Format Text */}
+          <button onMouseDown={(e) => handleCommand('bold', null, e)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: '#003366', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px' }} title="In đậm" onMouseEnter={e => e.currentTarget.style.backgroundColor='#e2e8f0'} onMouseLeave={e => e.currentTarget.style.backgroundColor='transparent'}><SvgIcons.Bold /></button>
+          <button onMouseDown={(e) => handleCommand('italic', null, e)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: '#003366', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px' }} title="In nghiêng" onMouseEnter={e => e.currentTarget.style.backgroundColor='#e2e8f0'} onMouseLeave={e => e.currentTarget.style.backgroundColor='transparent'}><SvgIcons.Italic /></button>
+          <button onMouseDown={(e) => handleCommand('underline', null, e)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: '#003366', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px' }} title="Gạch dưới" onMouseEnter={e => e.currentTarget.style.backgroundColor='#e2e8f0'} onMouseLeave={e => e.currentTarget.style.backgroundColor='transparent'}><SvgIcons.Underline /></button>
+          
+          <div style={{ width: '1px', height: '18px', backgroundColor: '#cbd5e1', margin: '0 2px' }}></div>
+          
+          {/* Colors */}
+          <button onMouseDown={(e) => handleCommand('foreColor', '#000000', e)} style={{ background: '#000000', border: '1px solid #cbd5e1', cursor: 'pointer', width: '20px', height: '20px', borderRadius: '50%', margin: '0 2px' }} title="Chữ Đen"></button>
+          <button onMouseDown={(e) => handleCommand('foreColor', '#ef4444', e)} style={{ background: '#ef4444', border: '1px solid #cbd5e1', cursor: 'pointer', width: '20px', height: '20px', borderRadius: '50%', margin: '0 2px' }} title="Chữ Đỏ"></button>
+          <button onMouseDown={(e) => handleCommand('foreColor', '#3b82f6', e)} style={{ background: '#3b82f6', border: '1px solid #cbd5e1', cursor: 'pointer', width: '20px', height: '20px', borderRadius: '50%', margin: '0 2px' }} title="Chữ Xanh Dương"></button>
+          <button onMouseDown={(e) => handleCommand('foreColor', '#10b981', e)} style={{ background: '#10b981', border: '1px solid #cbd5e1', cursor: 'pointer', width: '20px', height: '20px', borderRadius: '50%', margin: '0 2px' }} title="Chữ Xanh Lá"></button>
+          <button onMouseDown={(e) => handleCommand('foreColor', '#334155', e)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Reset màu chữ về mặc định"><SvgIcons.ResetColor /></button>
+
+          <div style={{ width: '1px', height: '18px', backgroundColor: '#cbd5e1', margin: '0 2px' }}></div>
+
+          {/* Highlight */}
+          <button onMouseDown={(e) => handleCommand('backColor', 'yellow', e)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#eab308', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Highlight Vàng"><SvgIcons.Highlighter /></button>
+          <button onMouseDown={(e) => handleCommand('resetBackground', null, e)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Bỏ Highlight"><SvgIcons.ResetColor /></button>
+
+          <div style={{ width: '1px', height: '18px', backgroundColor: '#cbd5e1', margin: '0 2px' }}></div>
+
+          {/* Image */}
+          <button onMouseDown={handleInsertImage} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: '#003366', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px' }} title="Chèn ảnh bằng URL" onMouseEnter={e => e.currentTarget.style.backgroundColor='#e2e8f0'} onMouseLeave={e => e.currentTarget.style.backgroundColor='transparent'}><SvgIcons.Image /></button>
         </div>
         
         {/* Editor Area */}
@@ -203,11 +232,9 @@ export default function CreateExercise() {
 
             setQuestions((data.questions || []).map(q => {
               let mappedQ = { ...q, id: q.id || Date.now().toString() + Math.random().toString(36).substr(2, 5) };
-              // Đảm bảo sectionId hợp lệ, ngăn chặn câu hỏi bị ẩn
               if (!mappedQ.sectionId || !loadedSections.some(s => s.id === mappedQ.sectionId)) {
                 mappedQ.sectionId = fallbackSecId;
               }
-              // Cập nhật lấy dữ liệu SAQ an toàn, ưu tiên |||
               if (mappedQ.type === 'SAQ') {
                 let answersArr = [''];
                 if (mappedQ.correctText) {
@@ -266,7 +293,6 @@ export default function CreateExercise() {
 
         if (data.questions) {
           setQuestions(data.questions.map(q => {
-              // Refresh ID để tránh trùng lặp nếu import đè
               let mappedQ = { ...q, id: (q.id || Date.now().toString()) + '_' + Math.random().toString(36).substr(2, 5) };
               if (!mappedQ.sectionId || !importedSections.some(s => s.id === mappedQ.sectionId)) {
                   mappedQ.sectionId = fallbackSecId;
@@ -447,12 +473,10 @@ export default function CreateExercise() {
 
       const questionsToSave = questions.map(q => {
         const copy = { ...q };
-        // Clean up orphaned questions safely
         if (!copy.sectionId || !validSectionIds.includes(copy.sectionId)) {
             copy.sectionId = fallbackSectionId;
         }
         if (copy.type === 'SAQ') {
-          // Lưu SAQ bằng ||| an toàn, tránh lỗi rỗng mảng
           const validAnswers = (copy.correctAnswers || []).map(a => String(a).trim()).filter(a => a !== '');
           if (validAnswers.length === 1) {
               copy.correctText = validAnswers[0] + '|||'; 
@@ -471,7 +495,7 @@ export default function CreateExercise() {
         quizMode: quizMode,
         sections: sections,
         questions: questionsToSave, 
-        modified: new Date().toISOString() // Sử dụng full ISO để tracking chính xác
+        modified: new Date().toISOString() 
       };
 
       if (folderId) {
@@ -842,20 +866,20 @@ export default function CreateExercise() {
                         </div>
                       )}
 
-                      {/* --- KHU VỰC GIẢI THÍCH (EXPLANATION) --- */}
+                      {/* --- KHU VỰC GIẢI THÍCH (EXPLANATION) VỚI RICH TEXT INPUT --- */}
                       <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px dashed #e2e8f0' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                           <div style={{ color: '#f59e0b' }}><SvgIcons.Question /></div>
                           <label style={{ fontWeight: '800', color: '#003366', fontSize: '14px' }}>Giải thích (Explanation)</label>
                         </div>
                         <p style={{ color: '#64748b', fontSize: '13px', fontStyle: 'italic', marginBottom: '12px' }}>
-                          * Nội dung này sẽ hiển thị cho học viên nếu bạn chọn chế độ "Instant Feedback" và bật "Show Question Feedback" lúc Launch.
+                          * Nội dung này sẽ hiển thị cho học viên nếu bạn chọn chế độ "Instant Feedback" và bật "Show Question Feedback" lúc Launch. Bạn có thể sử dụng các công cụ định dạng để làm nổi bật từ khóa.
                         </p>
-                        <textarea 
+                        <RichTextInput 
                           placeholder="Nhập giải thích chi tiết cho đáp án..."
                           value={q.explanation || ''}
-                          onChange={e => updateQuestionText(q.id, 'explanation', e.target.value)}
-                          style={{ width: '100%', padding: '14px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', minHeight: '80px', fontSize: '14px' }}
+                          onChange={val => updateQuestionText(q.id, 'explanation', val)}
+                          minHeight="80px"
                         />
                       </div>
 
